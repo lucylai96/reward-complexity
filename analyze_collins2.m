@@ -1,4 +1,4 @@
-function results = analyze_collins(data)
+function results = analyze_collins2(data)
 
 % Analyze Collins (2018) data.
 
@@ -8,7 +8,14 @@ end
 
 beta = linspace(0.1,15,50);
 
-for s = 1:length(data)
+% for set size = 3
+% < 0.2 complexity 13 (block 4 and block 10)
+% > 0.5 complexity 29(block 14), 31 (block 1, 10, 12), 51 
+
+% for set size = 6
+% < 0.2 complexity 13, 26
+% > 0.8 complexity 60, 77
+for s = 51
     B = unique(data(s).learningblock);
     cond = zeros(length(B),1);
     R_data =zeros(length(B),1);
@@ -21,8 +28,9 @@ for s = 1:length(data)
         action(action==-1) = 2;
         for a = 1:max(action)
             Pa(a) = mean(action==a); % marginal action probability
+            %PaR(a,:,b) = movmean(action==a,5); % running action probability
         end
-         R_data(b) = mutual_information(state,action,0.1);
+        R_data(b) = mutual_information(state,action,0.1);
         V_data(b) = mean(data(s).reward(ix));
         
         S = unique(state);
@@ -41,7 +49,17 @@ for s = 1:length(data)
           
         KL = nansum(Pas.*log(Pas./Pa),2); % KL divergence between policies for each state
         C(b) = sum(Ps'.*KL);
-       
+        
+        figure; hold on;
+        P  = [Pa; Pas];
+        for p = 1:size(P,1)
+            subplot(size(P,1),1,p); hold on; prettyplot;
+            bar(P(p,:));
+            if p >1 ylabel(strcat('P(a|s_',num2str(p-1),')')); title(num2str(KL(p-1,:))); else ylabel('P(a)'); title(num2str(mean(KL))); end
+            
+        end
+        equalabscissa(size(P,1),1)
+        suptitle(num2str(R_data(b)))
         
         [R(b,:),V(b,:)] = blahut_arimoto(Ps,Q,beta);
         
@@ -53,24 +71,19 @@ for s = 1:length(data)
         
         clear Pa Pas
     end
-     R_data = C';
-     
+    
+    figure; plot(C',R_data,'ko'); prettyplot; axis square; dline;
+    xlabel('empirically computed I(S;A)')
+    ylabel('matlab function estimated I(S;A)')
+    
+    R_data = C';
+    
     for c = 1:2
         results.R(s,:,c) = nanmean(R(cond==c,:));
         results.V(s,:,c) = nanmean(V(cond==c,:));
         results.R_data(s,c) = nanmean(R_data(cond==c));
         results.V_data(s,c) = nanmean(V_data(cond==c));
-        %results.Pa(:,:) = Pa;
-        
-        if results.R_data(s,c) < 0.15 % tag an example subject low complexity
-            results.ex(s,c,1) = s;   % results.R_data(s,c);
-            results.ex(s,c,2) = results.R_data(s,c);
-        end
-        
-        if results.R_data(s,c) > 0.48 % tag an example subject high complexity
-            results.ex(s,c,1) = s; 
-            results.ex(s,c,2) = results.R_data(s,c);
-        end
+   
     end
     
     clear R V
